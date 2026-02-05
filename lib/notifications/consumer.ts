@@ -4,6 +4,10 @@ import { getUserPreferences } from "@/lib/services/userPreferences";
 import type { UserPreferences } from "@/lib/types/notifications";
 import { NOTIFICATIONS_QUEUE } from "./constants";
 import { setupNotificationInfrastructure, isInfrastructureReady } from "./setup";
+import {
+  sendNotificationToUser as streamToUser,
+  isUserConnected,
+} from "./streamManager";
 import type { Notification, NotificationPayload, NotificationType } from "./types";
 
 /**
@@ -119,13 +123,23 @@ const defaultHandlers: Record<NotificationType, NotificationHandler> = {
     // In production, integrate with push service (FCM, APNs, etc.)
   },
 
-  "in-app": async (notification, preferences) => {
+  "in-app": async (notification) => {
     console.log(`[IN-APP] Delivering to user ${notification.userId}:`, {
       title: notification.title,
       body: notification.body,
       category: notification.category,
     });
-    // In production, store in database and/or broadcast via WebSocket/SSE
+
+    // Stream to connected client via SSE
+    if (isUserConnected(notification.userId)) {
+      const sent = streamToUser(notification.userId, notification);
+      if (sent) {
+        console.log(`[IN-APP] Streamed to user ${notification.userId} via SSE`);
+      }
+    } else {
+      console.log(`[IN-APP] User ${notification.userId} not connected, notification queued`);
+      // In production, store in database for later retrieval
+    }
   },
 };
 

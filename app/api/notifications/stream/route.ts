@@ -1,122 +1,16 @@
 import { type NextRequest } from "next/server";
-import type { Notification } from "@/lib/notifications";
-
-/**
- * Client connection store
- * Maps userId to their active response stream controller
- */
-interface ClientConnection {
-  controller: ReadableStreamDefaultController<Uint8Array>;
-  connectedAt: Date;
-  lastActivity: Date;
-}
-
-const clients = new Map<string, ClientConnection>();
+import {
+  registerClient,
+  removeClient,
+  getClient,
+  encodeSSE,
+  updateClientActivity,
+} from "@/lib/notifications/streamManager";
 
 /**
  * Heartbeat interval in milliseconds (30 seconds)
  */
 const HEARTBEAT_INTERVAL = 30000;
-
-/**
- * Encodes a message in SSE format
- */
-function encodeSSE(event: string, data: unknown): Uint8Array {
-  const encoder = new TextEncoder();
-  const payload = typeof data === "string" ? data : JSON.stringify(data);
-  return encoder.encode(`event: ${event}\ndata: ${payload}\n\n`);
-}
-
-/**
- * Sends a notification to a specific user's stream
- */
-export function sendNotificationToUser(
-  userId: string,
-  notification: Notification
-): boolean {
-  const client = clients.get(userId);
-
-  if (!client) {
-    return false;
-  }
-
-  try {
-    client.controller.enqueue(encodeSSE("notification", notification));
-    client.lastActivity = new Date();
-    return true;
-  } catch (error) {
-    console.error(`Error sending notification to user ${userId}:`, error);
-    removeClient(userId);
-    return false;
-  }
-}
-
-/**
- * Broadcasts a notification to multiple users
- */
-export function broadcastNotification(
-  userIds: string[],
-  notification: Notification
-): { sent: number; failed: number } {
-  let sent = 0;
-  let failed = 0;
-
-  for (const userId of userIds) {
-    if (sendNotificationToUser(userId, notification)) {
-      sent++;
-    } else {
-      failed++;
-    }
-  }
-
-  return { sent, failed };
-}
-
-/**
- * Gets the list of connected user IDs
- */
-export function getConnectedUsers(): string[] {
-  return Array.from(clients.keys());
-}
-
-/**
- * Checks if a user is connected
- */
-export function isUserConnected(userId: string): boolean {
-  return clients.has(userId);
-}
-
-/**
- * Gets connection info for a user
- */
-export function getConnectionInfo(userId: string): {
-  connectedAt: Date;
-  lastActivity: Date;
-} | null {
-  const client = clients.get(userId);
-  if (!client) return null;
-
-  return {
-    connectedAt: client.connectedAt,
-    lastActivity: client.lastActivity,
-  };
-}
-
-/**
- * Removes a client connection
- */
-function removeClient(userId: string): void {
-  const client = clients.get(userId);
-  if (client) {
-    try {
-      client.controller.close();
-    } catch {
-      // Controller might already be closed
-    }
-    clients.delete(userId);
-    console.log(`Client disconnected: ${userId}. Active connections: ${clients.size}`);
-  }
-}
 
 /**
  * Starts the heartbeat for a client
@@ -131,14 +25,14 @@ function startHeartbeat(
       return;
     }
 
-    const client = clients.get(userId);
+    const client = getClient(userId);
     if (!client) {
       return;
     }
 
     try {
       controller.enqueue(encodeSSE("heartbeat", { timestamp: Date.now() }));
-      client.lastActivity = new Date();
+      updateClientActivity(userId);
 
       // Schedule next heartbeat
       setTimeout(heartbeat, HEARTBEAT_INTERVAL);
@@ -160,7 +54,7 @@ function startHeartbeat(
  *
  * Events:
  * - connected: Initial connection confirmation
- * - notification: New notification data
+ * - notification: New notification data (pushed from RabbitMQ consumer)
  * - heartbeat: Keep-alive ping (every 30s)
  */
 export async function GET(request: NextRequest): Promise<Response> {
@@ -177,7 +71,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   // Close existing connection for this user if any
-  if (clients.has(userId)) {
+  if (getClient(userId)) {
     removeClient(userId);
   }
 
@@ -187,14 +81,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   // Create the readable stream
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      // Register the client
-      clients.set(userId, {
-        controller,
-        connectedAt: new Date(),
-        lastActivity: new Date(),
-      });
-
-      console.log(`Client connected: ${userId}. Active connections: ${clients.size}`);
+      // Register the client with the stream manager
+      registerClient(userId, controller);
 
       // Send initial connection confirmation
       controller.enqueue(
