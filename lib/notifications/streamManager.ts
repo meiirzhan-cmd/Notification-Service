@@ -96,9 +96,9 @@ export function sendNotificationToUser(
 }
 
 /**
- * Broadcasts a notification to multiple users
+ * Streams a notification to multiple connected users
  */
-export function broadcastNotification(
+export function streamToUsers(
   userIds: string[],
   notification: Notification
 ): { sent: number; failed: number } {
@@ -117,12 +117,12 @@ export function broadcastNotification(
 }
 
 /**
- * Broadcasts a notification to all connected users
+ * Streams a notification to all connected users
  */
-export function broadcastToAll(
+export function streamToAllConnected(
   notification: Notification
 ): { sent: number; failed: number } {
-  return broadcastNotification(Array.from(clients.keys()), notification);
+  return streamToUsers(Array.from(clients.keys()), notification);
 }
 
 /**
