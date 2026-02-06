@@ -1,6 +1,7 @@
 import type { ConsumeMessage } from "amqplib";
 import rabbitmq from "@/lib/rabbitmq";
 import { getUserPreferences } from "@/lib/services/userPreferences";
+import { storeNotification } from "@/lib/services/notificationStore";
 import type { UserPreferences } from "@/lib/types/notifications";
 import { NOTIFICATIONS_QUEUE } from "./constants";
 import { setupNotificationInfrastructure, isInfrastructureReady } from "./setup";
@@ -193,6 +194,13 @@ async function processNotification(
 
   // Execute the handler
   await handler(notification, preferences);
+
+  // Store notification in history for later retrieval
+  try {
+    await storeNotification(notification);
+  } catch (error) {
+    console.error(`Failed to store notification ${notification.id} in history:`, error);
+  }
 
   console.log(
     `Successfully processed notification ${notification.id} for user ${notification.userId}`
