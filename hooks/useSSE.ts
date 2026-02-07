@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
+import { useNotificationStore } from "@/stores/notification";
 
 export type SSEStatus = "connecting" | "connected" | "disconnected" | "error";
 
@@ -21,82 +22,7 @@ export interface UseSSEOptions {
   autoConnect?: boolean;
 }
 
-export interface UseSSEReturn {
-  status: SSEStatus;
-  lastEvent: SSEEvent | null;
-  connect: () => void;
-  disconnect: () => void;
-  reconnectAttempts: number;
-}
-
-/**
- * Creates an EventSource connection and attaches event listeners.
- * Returns a cleanup function that closes the connection.
- */
-function createEventSource(
-  userId: string,
-  callbacks: {
-    onStatusChange: (status: SSEStatus) => void;
-    onEvent: (event: SSEEvent) => void;
-    onNotification?: (data: unknown) => void;
-    onConnected?: (data: unknown) => void;
-    onHeartbeat?: (data: unknown) => void;
-    onError?: (error: Event) => void;
-  },
-  reconnect: {
-    attemptsRef: React.RefObject<number>;
-    maxAttempts: number;
-    interval: number;
-    scheduleRef: React.RefObject<(() => void) | null>;
-  },
-): EventSource {
-  const url = `/api/notifications/stream?userId=${encodeURIComponent(userId)}`;
-  const eventSource = new EventSource(url);
-
-  eventSource.addEventListener("connected", (event) => {
-    const data = JSON.parse(event.data);
-    reconnect.attemptsRef.current = 0;
-    callbacks.onStatusChange("connected");
-    callbacks.onEvent({ type: "connected", data, timestamp: Date.now() });
-    callbacks.onConnected?.(data);
-  });
-
-  eventSource.addEventListener("notification", (event) => {
-    const data = JSON.parse(event.data);
-    callbacks.onEvent({ type: "notification", data, timestamp: Date.now() });
-    callbacks.onNotification?.(data);
-  });
-
-  eventSource.addEventListener("heartbeat", (event) => {
-    const data = JSON.parse(event.data);
-    callbacks.onEvent({ type: "heartbeat", data, timestamp: Date.now() });
-    callbacks.onHeartbeat?.(data);
-  });
-
-  eventSource.onerror = (error) => {
-    console.error("SSE connection error:", error);
-    callbacks.onStatusChange("error");
-    callbacks.onError?.(error);
-
-    eventSource.close();
-
-    const attempts = reconnect.attemptsRef.current;
-    if (attempts < reconnect.maxAttempts) {
-      reconnect.attemptsRef.current = attempts + 1;
-      console.log(
-        `SSE reconnecting... (attempt ${attempts + 1}/${reconnect.maxAttempts})`
-      );
-      reconnect.scheduleRef.current?.();
-    } else {
-      console.error("SSE max reconnection attempts reached");
-      callbacks.onStatusChange("disconnected");
-    }
-  };
-
-  return eventSource;
-}
-
-export function useSSE(options: UseSSEOptions): UseSSEReturn {
+export function useSSE(options: UseSSEOptions): void {
   const {
     userId,
     onNotification,
@@ -108,14 +34,23 @@ export function useSSE(options: UseSSEOptions): UseSSEReturn {
     autoConnect = true,
   } = options;
 
-  const [status, setStatus] = useState<SSEStatus>("disconnected");
-  const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const store = useNotificationStore;
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  const scheduleReconnectRef = useRef<(() => void) | null>(null);
+  const connectRef = useRef<() => void>(null);
+
+  // Store callbacks in refs so they never cause reconnection
+  const onNotificationRef = useRef(onNotification);
+  const onConnectedRef = useRef(onConnected);
+  const onHeartbeatRef = useRef(onHeartbeat);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => { onNotificationRef.current = onNotification; }, [onNotification]);
+  useEffect(() => { onConnectedRef.current = onConnected; }, [onConnected]);
+  useEffect(() => { onHeartbeatRef.current = onHeartbeat; }, [onHeartbeat]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
   const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -133,12 +68,11 @@ export function useSSE(options: UseSSEOptions): UseSSEReturn {
     }
 
     reconnectAttemptsRef.current = 0;
-    setStatus("disconnected");
-    setReconnectAttempts(0);
-  }, [clearReconnectTimeout]);
+    store.getState().setConnectionStatus("disconnected");
+    store.getState().setReconnectAttempts(0);
+  }, [clearReconnectTimeout, store]);
 
   const connect = useCallback(() => {
-    // Don't connect if already connecting or connected
     if (
       eventSourceRef.current &&
       eventSourceRef.current.readyState !== EventSource.CLOSED
@@ -151,54 +85,67 @@ export function useSSE(options: UseSSEOptions): UseSSEReturn {
       return;
     }
 
-    setStatus("connecting");
+    store.getState().setConnectionStatus("connecting");
 
-    eventSourceRef.current = createEventSource(
-      userId,
-      {
-        onStatusChange: setStatus,
-        onEvent: (event) => {
-          setLastEvent(event);
-          if (event.type === "connected") {
-            setReconnectAttempts(0);
-          }
-        },
-        onNotification,
-        onConnected,
-        onHeartbeat,
-        onError,
-      },
-      {
-        attemptsRef: reconnectAttemptsRef,
-        maxAttempts: maxReconnectAttempts,
-        interval: reconnectInterval,
-        scheduleRef: scheduleReconnectRef,
-      },
-    );
-  }, [
-    userId,
-    onNotification,
-    onConnected,
-    onHeartbeat,
-    onError,
-    reconnectInterval,
-    maxReconnectAttempts,
-  ]);
+    const url = `/api/notifications/stream?userId=${encodeURIComponent(userId)}`;
+    const eventSource = new EventSource(url);
 
-  // Set up reconnect scheduling via ref to avoid circular deps
-  useEffect(() => {
-    scheduleReconnectRef.current = () => {
-      reconnectTimeoutRef.current = setTimeout(() => {
-        setReconnectAttempts(reconnectAttemptsRef.current);
-        connect();
-      }, reconnectInterval);
+    eventSource.addEventListener("connected", (event) => {
+      const data = JSON.parse(event.data);
+      reconnectAttemptsRef.current = 0;
+      store.getState().setConnectionStatus("connected");
+      store.getState().setLastSSEEvent({ type: "connected", data, timestamp: Date.now() });
+      store.getState().setReconnectAttempts(0);
+      onConnectedRef.current?.(data);
+    });
+
+    eventSource.addEventListener("notification", (event) => {
+      const data = JSON.parse(event.data);
+      store.getState().setLastSSEEvent({ type: "notification", data, timestamp: Date.now() });
+      onNotificationRef.current?.(data);
+    });
+
+    eventSource.addEventListener("heartbeat", (event) => {
+      const data = JSON.parse(event.data);
+      store.getState().setLastSSEEvent({ type: "heartbeat", data, timestamp: Date.now() });
+      onHeartbeatRef.current?.(data);
+    });
+
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error:", error);
+      store.getState().setConnectionStatus("error");
+      onErrorRef.current?.(error);
+
+      eventSource.close();
+      eventSourceRef.current = null;
+
+      const attempts = reconnectAttemptsRef.current;
+      if (attempts < maxReconnectAttempts) {
+        reconnectAttemptsRef.current = attempts + 1;
+        store.getState().setReconnectAttempts(attempts + 1);
+        console.log(
+          `SSE reconnecting... (attempt ${attempts + 1}/${maxReconnectAttempts})`,
+        );
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectRef.current?.();
+        }, reconnectInterval);
+      } else {
+        console.error("SSE max reconnection attempts reached");
+        store.getState().setConnectionStatus("disconnected");
+      }
     };
-  }, [connect, reconnectInterval]);
 
-  // Auto-connect / cleanup
+    eventSourceRef.current = eventSource;
+  }, [userId, maxReconnectAttempts, reconnectInterval, store]);
+
+  // Keep connectRef in sync
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
+  // Auto-connect on mount, cleanup on unmount
   useEffect(() => {
     if (autoConnect && userId) {
-      // Schedule outside synchronous effect body
       const id = setTimeout(() => connect(), 0);
       return () => {
         clearTimeout(id);
@@ -210,12 +157,4 @@ export function useSSE(options: UseSSEOptions): UseSSEReturn {
       disconnect();
     };
   }, [userId, autoConnect, connect, disconnect]);
-
-  return {
-    status,
-    lastEvent,
-    connect,
-    disconnect,
-    reconnectAttempts,
-  };
 }

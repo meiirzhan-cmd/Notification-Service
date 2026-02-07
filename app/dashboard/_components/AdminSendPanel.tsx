@@ -12,13 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useNotificationContext } from "@/contexts/NotificationContext";
+import { useNotificationStore } from "@/stores/notification";
 import { Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DashboardCard } from "./DashboardCard";
 
+const DEMO_USER_ID = "demo-user-001";
+
 export function AdminSendPanel() {
-  const { notifications: notificationsHook } = useNotificationContext();
+  const sendNotification = useNotificationStore((s) => s.sendNotification);
+  const refresh = useNotificationStore((s) => s.refresh);
   const [isSending, setIsSending] = useState(false);
   const [type, setType] = useState<"email" | "push" | "in-app">("in-app");
   const [category, setCategory] = useState("updates");
@@ -30,7 +33,8 @@ export function AdminSendPanel() {
   const handleSend = async () => {
     setIsSending(true);
     try {
-      const notification = await notificationsHook.sendNotification({
+      const notification = await sendNotification({
+        userId: DEMO_USER_ID,
         type,
         title,
         body,
@@ -38,6 +42,8 @@ export function AdminSendPanel() {
       });
       if (notification) {
         console.log("Sent:", notification.id);
+        // Re-fetch from Redis after consumer has had time to process
+        setTimeout(() => refresh(DEMO_USER_ID), 1500);
       }
     } finally {
       setIsSending(false);

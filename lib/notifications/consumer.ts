@@ -130,17 +130,6 @@ const defaultHandlers: Record<NotificationType, NotificationHandler> = {
       body: notification.body,
       category: notification.category,
     });
-
-    // Stream to connected client via SSE
-    if (isUserConnected(notification.userId)) {
-      const sent = streamToUser(notification.userId, notification);
-      if (sent) {
-        console.log(`[IN-APP] Streamed to user ${notification.userId} via SSE`);
-      }
-    } else {
-      console.log(`[IN-APP] User ${notification.userId} not connected, notification queued`);
-      // In production, store in database for later retrieval
-    }
   },
 };
 
@@ -194,6 +183,11 @@ async function processNotification(
 
   // Execute the handler
   await handler(notification, preferences);
+
+  // Stream to connected client via SSE (regardless of notification type)
+  if (isUserConnected(notification.userId)) {
+    streamToUser(notification.userId, notification);
+  }
 
   // Store notification in history for later retrieval
   try {

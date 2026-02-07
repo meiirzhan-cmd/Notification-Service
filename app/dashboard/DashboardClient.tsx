@@ -1,14 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
 import {
   NotificationToastContainer,
-  pushToast,
+  NotificationSetup,
 } from "@/components/notifications";
-import {
-  useNotificationContext,
-  useNotificationList,
-} from "@/contexts/NotificationContext";
+import { useNotificationStore } from "@/stores/notification";
 import { Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,25 +15,14 @@ import { QueueStats } from "./_components/QueueStats";
 import { CacheViewer } from "./_components/CacheViewer";
 import { PreferencesPanel } from "./_components/PreferencesPanel";
 
-export default function DashboardClient() {
-  const { connectionStatus } = useNotificationContext();
-  const notificationsHook = useNotificationList();
+const DEMO_USER_ID = "demo-user-001";
 
-  // Show toast for real-time notifications
-  useEffect(() => {
-    if (notificationsHook.notifications.length > 0) {
-      const latest = notificationsHook.notifications[0];
-      if (latest && !latest.readAt) {
-        const age = Date.now() - new Date(latest.createdAt).getTime();
-        if (age < 5000) {
-          pushToast(latest);
-        }
-      }
-    }
-  }, [notificationsHook.notifications]);
+export default function DashboardClient() {
+  const connectionStatus = useNotificationStore((s) => s.connectionStatus);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <NotificationSetup userId={DEMO_USER_ID} />
       <DashboardHeader />
 
       <main className="mx-auto max-w-7xl px-4 py-6">

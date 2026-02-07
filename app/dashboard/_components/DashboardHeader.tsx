@@ -6,17 +6,21 @@ import {
   NotificationPanel,
   ConnectionStatus,
 } from "@/components/notifications";
-import {
-  useNotificationContext,
-  useNotificationList,
-  useUnreadCount,
-} from "@/contexts/NotificationContext";
+import { useNotificationStore } from "@/stores/notification";
 import { Bell } from "lucide-react";
 
+const DEMO_USER_ID = "demo-user-001";
+
 export function DashboardHeader() {
-  const unreadCount = useUnreadCount();
-  const { connectionStatus } = useNotificationContext();
-  const notificationsHook = useNotificationList();
+  const connectionStatus = useNotificationStore((s) => s.connectionStatus);
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const isLoading = useNotificationStore((s) => s.isLoading);
+  const pagination = useNotificationStore((s) => s.pagination);
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
+  const deleteNotification = useNotificationStore((s) => s.deleteNotification);
+  const loadMore = useNotificationStore((s) => s.loadMore);
+
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   return (
@@ -37,16 +41,16 @@ export function DashboardHeader() {
               onClick={() => setIsPanelOpen(!isPanelOpen)}
             />
             <NotificationPanel
-              notifications={notificationsHook.notifications}
-              unreadCount={notificationsHook.unreadCount}
-              isLoading={notificationsHook.isLoading}
-              hasMore={notificationsHook.pagination.hasMore}
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isLoading={isLoading}
+              hasMore={pagination.hasMore}
               connectionStatus={connectionStatus}
               isOpen={isPanelOpen}
               onClose={() => setIsPanelOpen(false)}
-              onMarkAsRead={notificationsHook.markAsRead}
-              onDelete={notificationsHook.deleteNotification}
-              onLoadMore={notificationsHook.loadMore}
+              onMarkAsRead={(id) => markAsRead(DEMO_USER_ID, id)}
+              onDelete={(id) => deleteNotification(DEMO_USER_ID, id)}
+              onLoadMore={() => loadMore(DEMO_USER_ID)}
             />
           </div>
         </div>

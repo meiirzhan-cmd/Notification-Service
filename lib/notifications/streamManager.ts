@@ -10,7 +10,14 @@ interface ClientConnection {
   lastActivity: Date;
 }
 
-const clients = new Map<string, ClientConnection>();
+// Use globalThis so the Map is shared across all Next.js module contexts
+// (instrumentation, route handlers, etc.) within the same process.
+declare global {
+  var __sseClients: Map<string, ClientConnection> | undefined;
+}
+
+const clients = globalThis.__sseClients ?? new Map<string, ClientConnection>();
+globalThis.__sseClients = clients;
 
 /**
  * Encodes a message in SSE format
