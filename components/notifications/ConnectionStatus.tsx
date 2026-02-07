@@ -11,12 +11,15 @@ interface ConnectionStatusProps {
   showLabel?: boolean;
 }
 
-const statusConfig: Record<SSEStatus, {
-  color: string;
-  dotColor: string;
-  label: string;
-  Icon: React.ElementType;
-}> = {
+const statusConfig: Record<
+  SSEStatus,
+  {
+    color: string;
+    dotColor: string;
+    label: string;
+    Icon: React.ElementType;
+  }
+> = {
   connected: {
     color: "text-green-600 dark:text-green-400",
     dotColor: "bg-green-500",
@@ -48,7 +51,7 @@ export function ConnectionStatus({
   reconnectAttempts = 0,
   className,
   showLabel = true,
-}: ConnectionStatusProps) {
+}: Readonly<ConnectionStatusProps>) {
   const config = statusConfig[status];
   const { Icon } = config;
 
@@ -59,7 +62,7 @@ export function ConnectionStatus({
           className={cn(
             "size-2 rounded-full",
             config.dotColor,
-            status === "connected" && "animate-pulse"
+            status === "connected" && "animate-pulse",
           )}
         />
       </div>
@@ -68,7 +71,7 @@ export function ConnectionStatus({
         className={cn(
           "size-4",
           config.color,
-          status === "connecting" && "animate-spin"
+          status === "connecting" && "animate-spin",
         )}
       />
 

@@ -85,7 +85,7 @@ export function NotificationToastContainer({
   return (
     <div
       className={cn(
-        "fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-2 w-[360px]",
+        "fixed bottom-4 right-4 z-100 flex flex-col-reverse gap-2 w-360px",
         className,
       )}
     >

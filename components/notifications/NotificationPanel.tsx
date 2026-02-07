@@ -75,7 +75,7 @@ export function NotificationPanel({
       ref={panelRef}
       className={cn(
         "absolute right-0 top-full mt-2 z-50",
-        "w-[380px] max-h-[480px] flex flex-col",
+        "w-380px max-h-480px flex flex-col",
         "rounded-lg border border-border bg-background shadow-lg",
         "animate-in fade-in-0 zoom-in-95 slide-in-from-top-2",
       )}
@@ -87,7 +87,7 @@ export function NotificationPanel({
             Notifications
           </h3>
           {unreadCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+            <span className="inline-flex items-center justify-center min-w-20px h-5 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
               {unreadCount}
             </span>
           )}

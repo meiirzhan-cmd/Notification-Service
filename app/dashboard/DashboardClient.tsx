@@ -11,7 +11,6 @@ import {
 } from "@/contexts/NotificationContext";
 import { Wifi } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Notification } from "@/lib/notifications";
 
 import { DashboardHeader } from "./_components/DashboardHeader";
 import { AdminSendPanel } from "./_components/AdminSendPanel";

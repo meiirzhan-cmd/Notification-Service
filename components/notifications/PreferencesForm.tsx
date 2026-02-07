@@ -104,7 +104,7 @@ export function PreferencesForm({
   onUpdateQuietHours,
   onUpdateFrequency,
   className,
-}: PreferencesFormProps) {
+}: Readonly<PreferencesFormProps>) {
   if (isLoading || !preferences) {
     return (
       <div className={cn("flex items-center justify-center py-12", className)}>
