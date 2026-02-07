@@ -106,7 +106,7 @@ function isCategoryEnabled(
  * Default handlers for each notification type
  */
 const defaultHandlers: Record<NotificationType, NotificationHandler> = {
-  email: async (notification, preferences) => {
+  email: async (notification) => {
     console.log(`[EMAIL] Sending to user ${notification.userId}:`, {
       title: notification.title,
       body: notification.body,
@@ -115,7 +115,7 @@ const defaultHandlers: Record<NotificationType, NotificationHandler> = {
     // In production, integrate with email service (SendGrid, SES, etc.)
   },
 
-  push: async (notification, preferences) => {
+  push: async (notification) => {
     console.log(`[PUSH] Sending to user ${notification.userId}:`, {
       title: notification.title,
       body: notification.body,
