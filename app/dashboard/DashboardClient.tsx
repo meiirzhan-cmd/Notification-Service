@@ -31,7 +31,7 @@ export default function DashboardClient() {
       if (latest && !latest.readAt) {
         const age = Date.now() - new Date(latest.createdAt).getTime();
         if (age < 5000) {
-          pushToast(latest as Notification);
+          pushToast(latest);
         }
       }
     }
